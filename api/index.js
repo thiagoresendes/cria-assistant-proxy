@@ -7,6 +7,7 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 app.use(cors());
+app.use(express.json()); // <-- ESSA LINHA É ESSENCIAL AGORA
 app.use(bodyParser.json());
 
 const openai = new OpenAI({
@@ -15,10 +16,11 @@ const openai = new OpenAI({
 
 app.post("/api/chat", async (req, res) => {
   try {
-    const userMessage = req.body.pergunta;
-    if (!userMessage) return res.status(400).json({ error: "Pergunta ausente." });
+    const userMessage = req.body.message;
+    console.log("Mensagem recebida:", userMessage);
 
     const thread = await openai.beta.threads.create();
+
     await openai.beta.threads.messages.create(thread.id, {
       role: "user",
       content: userMessage
@@ -32,15 +34,16 @@ app.post("/api/chat", async (req, res) => {
     while (true) {
       result = await openai.beta.threads.runs.retrieve(thread.id, run.id);
       if (result.status === "completed") break;
-      if (result.status === "failed") return res.status(500).json({ error: "Execução falhou." });
+      if (result.status === "failed")
+        return res.status(500).json({ error: "Assistant run failed." });
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
 
     const messages = await openai.beta.threads.messages.list(thread.id);
-    const last = messages.data.reverse().find(m => m.role === "assistant");
+    const lastMessage = messages.data.find(msg => msg.role === "assistant");
 
     return res.status(200).json({
-      resposta: last?.content?.[0]?.text?.value || "⚠️ Sem resposta gerada."
+      reply: lastMessage?.content?.[0]?.text?.value || "⚠️ Sem resposta gerada."
     });
 
   } catch (error) {
@@ -50,5 +53,5 @@ app.post("/api/chat", async (req, res) => {
 });
 
 app.listen(port, () => {
-  console.log(`Proxy rodando na porta ${port}`);
+  console.log(`🚀 Proxy rodando na porta ${port}`);
 });
